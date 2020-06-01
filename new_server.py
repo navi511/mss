@@ -14,7 +14,7 @@ class Server:
         """Socket Creation"""
         try:
             self.logger.info("creating a socket connection")
-            self.s = socket.socket()
+            self.ss = socket.socket()
         except socket.error as msg:  # IN case connection timed out and socket craetion is failed.
             print("Socket Creation error: " + str(msg))
 
@@ -22,55 +22,73 @@ class Server:
         """Binding the socket and listening for connection"""
         try:
             print("Binding the port " + str(port))
-            self.s.bind((host, port))
-            self.s.listen(5)
+            self.ss.bind((host, port))
+            self.ss.listen(5)
 
         except socket.error as msg:
             self.logger.error("socket binding error: " + str(msg) + "\n" + "Retrying ....")
             print("socket binding error: " + str(msg) + "\n" + "Retrying ....")
             self.bind_socket()
 
-    def socket_accept(self):
+    def accept_socket(self):
         """Connection establishment with client"""
-        conn, address = self.s.accept()
-        self.logger.info("connection has been established " + "with IP " + address[0] + " and port " + str(address[1]))
-        print("connection has been established " + "with IP " + address[0] + " and port " + str(address[1]))
-        choice_msg = "With which operation you would like to proceed with\n1.Echo\n2.File Transfer"
-        self.recv_data(conn, choice_msg)
+        conn, (IPAddr, Port) = self.ss.accept()
+        self.logger.info("connection has been established " + "with IP " + IPAddr + " and port " + str(Port))
+        print("connection has been established.\nServer listening at " + IPAddr + ":" + str(Port)+" ...")
+        select_service = "Select any Service:\nType 1 for 'Echo'\nType 2 for 'File Transfer'"
+        self.recv_data(conn, select_service)
         conn.close()
 
-    def recv_data(self, conn, msg):
+    def recv_data(self, conn, select_service):
         """Receiving data for choices"""
-        conn.send(msg.encode())
+        conn.send(select_service.encode('utf-8'))
         try:
-            msg_recv = conn.recv(1024)
-            self.logger.info("=========Value received from client: " + msg_recv.decode() + "==========")
-            print("=========Value received from client: ", msg_recv.decode(), "==========")
-            conn.send(msg_recv)
-            self.select_choice(conn, msg_recv)
+            client_res = conn.recv(1024)
+            conn.send(client_res)
+            self.logger.info("######## Client Requested for '" + self.selected_service(client_res) + "' Service ########")
+            print("######## Client Requested for '" + self.selected_service(client_res) + "' Service ########")
+            self.select_choice(conn, client_res)
         except socket.error as msg:
             self.logger.info("Socket error: " + str(msg))
 
+    def selected_service(self, select_service):
+        try:
+            serv_name = select_service.decode('utf-8')
+            if serv_name == '1':
+                selected_service = "Echo"
+            elif serv_name == '2':
+                selected_service = "File Transfer"
+            else:
+                selected_service = "Invalid"
+            return selected_service
+        except socket.error as msg:
+            self.logger.info("error while fetching service name: " + str(msg))
+
     def select_choice(self, conn, choice):
         """Choice selected """
-        if choice.decode() == "1":
-            echo_str = "======You have choosed ECHO service !!!====== \n======If you want to exit from ECHO service then please Enter (Quit/Exit)======"
-            conn.send(echo_str.encode())
+        if choice.decode('utf-8') == "1":
+            echo_str = "======You have choosed ECHO service !!!====== \n======Press Quit/Exit to Terminate service======"
+            conn.send(echo_str.encode('utf-8'))
             self.server_echo(conn)
-        if choice.decode() == "2":
+        if choice.decode('utf-8') == "2":
             self.server_fts()
 
     def server_echo(self, conn):
         """Echo Server """
+        flag = True
         while True:
-            recv_data = conn.recv(1024)
-            decoded_data = recv_data.decode()
-            self.logger.info("Input received from client: "+decoded_data)
-            print("Input received from client: ", decoded_data)
-            if decoded_data == "Quit" or decoded_data == "quit" or decoded_data == "Exit" or decoded_data == "exit":
-                conn.send("Disconnecting from server ...\a".encode())
+            client_res = conn.recv(1024)
+            plain_text = client_res.decode('utf-8')
+            self.logger.info("Input received from client: " + plain_text)
+            if flag:
+                print("Messages received from client:\n", plain_text)
+                flag = False
+            else:
+                print(plain_text)
+            if plain_text.lower() == "quit" or plain_text.upper() == "QUIT" or plain_text.lower() == "exit" or plain_text.upper() == "EXIT":
+                conn.send("Disconnecting from server ...\a".encode('utf-8'))
                 break
-            conn.sendall(recv_data)
+            conn.sendall(client_res)
         conn.close()
 
     def server_fts(self):
@@ -81,9 +99,8 @@ def main():
     """Main Function"""
     server_obj = Server()
     server_obj.bind_socket()
-    server_obj.socket_accept()
+    server_obj.accept_socket()
 
 
 if __name__ == "__main__":
     main()
-
